@@ -29,7 +29,47 @@ demo %>%
 
 
 
+# keep only participants with data in weeks 2,4,6,8,10,12
+weeks_to_keep <- c(2, 4, 6, 8, 10, 12)
 
+phq9_long1 <- phq9_long %>%
+  group_by(participant_id) %>%
+  filter(all(weeks_to_keep %in% week)) %>%
+  ungroup() %>%
+  filter(week %in% weeks_to_keep)
+
+
+table(phq9_long1$week)
+# why does week 4 have one more observation than others. 
+# maybe a participant has 2 rows for week 4. check for this
+
+phq9_long2 <- phq9_long1 %>%
+  group_by(participant_id, week) %>%
+  mutate(week_count = n()) %>%
+  ungroup()
+
+
+participants_with_more_than_one_row <- phq9_long2 %>%
+  filter(week_count > 1) %>%
+  select(participant_id, week) %>%
+  distinct()
+
+participants_with_more_than_one_row
+
+#participant EN05022 has 2 rows for week 4
+View(filter(phq9_long1, participant_id == 'EN05022'))
+# row 3703 seems to be off, based on date
+
+phq9_long1 <- phq9_long1 %>%
+  filter(ROW_ID != 3703)
+
+table(phq9_long1$week)
+# we good
+rm(phq9_long2, weeks_to_keep,  participants_with_more_than_one_row)
+
+
+#set up empty data frame to hold model variables only
+dat <- data.frame(phq9_long1$participant_id)
 
 
 
