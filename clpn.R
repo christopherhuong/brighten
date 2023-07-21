@@ -61,136 +61,196 @@ View(filter(phq9_long1, participant_id == 'EN05022'))
 # row 3703 seems to be off, based on date
 
 phq9_long1 <- phq9_long1 %>%
-  filter(ROW_ID != 3703)
+  filter(ROW_ID != 3703) %>%
+  select(-c(ROW_ID, ROW_VERSION, sum_phq9, phq9Date))
 
 table(phq9_long1$week)
 # we good
 rm(phq9_long2, weeks_to_keep,  participants_with_more_than_one_row)
 
 
-#set up empty data frame to hold model variables only
-dat <- data.frame(phq9_long1$participant_id)
+library(psych)
+library(car)
+library(NetworkComparisonTest)
+library(ggplot2)
+library(mgm)
+library(mice)
+library(bootnet)
+library(qgraph)
+library(psychTools)
+library(glmnet)
+library(qgraph)
+library(lavaan)
+library(mice)
+library(readr)
 
 
 
+# create dataframe with baseline data, matching participant_id with values found in phq9_long1
+participant_list <- as.character(unique(phq9_long1$participant_id))
+
+w0 <- phq9_baseline %>%
+  filter(participant_id %in% participant_list) 
+
+
+
+
+# why does our baseline only have 220/272 participants? 
+# now have to reduce the analytic set further to 220
+participant_list <- as.character(unique(w0$participant_id))
+
+w0 <- w0 %>%
+  select(-c(ROW_ID, ROW_VERSION, participant_id, study, baselinePHQ9date))
+
+# create dataframe with week 2 data 
+w2 <- phq9_long1 %>%
+  filter(week ==2) %>%
+  filter(participant_id %in% participant_list) %>%
+  select(-c(participant_id, week)) 
+
+# create dataframe with week 4 data
+w4 <- phq9_long1 %>%
+  filter(week ==4) %>%
+  filter(participant_id %in% participant_list) %>%
+  select(-c(participant_id, week)) 
+
+# create dataframe with week 12 data
+w12 <- phq9_long1 %>%
+  filter(week ==12) %>%
+  filter(participant_id %in% participant_list) %>%
+  select(-c(participant_id, week)) 
+
+# create dataframe with demographic variables of participants in the analytic set
+phq_demo <- demo %>%
+  filter(participant_id %in% participant_list)
+
+
+# create networks and covariates
+w0_w2 <- data.frame(w0, w2)
+w2_w4 <- data.frame(w2, w4)
+w4_w12 <- data.frame(w4, w12)
+
+w0_w2$gender <- as.factor(phq_demo$gender)
+w2_w4$gender <- as.factor(phq_demo$gender)
+w4_w12$gender <- as.factor(phq_demo$gender)
+
+w0_w2$ethnicity <- as.factor(phq_demo$race)
+w2_w4$ethnicity <- as.factor(phq_demo$race)
+w4_w12$ethnicity <- as.factor(phq_demo$race)
+
+rm(participant_list)
 ## Set number of covariates
-numCovar <- 4
-## Set number of symptoms
+numCovar <- 2
+## Set number of nodes
 k <- 9
 
-## Set up empty matrix of coefficients
-adjMatCov.early <- matrix(0, (numCovar+k), (numCovar+k)) 
-adjMatCov.middle <- matrix(0, (numCovar+k), (numCovar+k)) 
 
-## Estimate CLPN for early
+# longitudinal network analysis #################################################
+# 1st network; baseline to w2
+adjMat <- matrix(0, (numCovar+k), (numCovar+k))
+
 for (i in 1:k) {
   set.seed(1)
-  lassoregCov.early <- cv.glmnet(data.matrix(earlyDat[,c(1:k,(k*2+1):(k*2+numCovar))]), earlyDat[,(k+i)], nfolds=10,
-                                 family="binomial", alpha=1, standardize=TRUE)
-  lambdaCov.early <- lassoregCov.early$lambda.min
-  adjMatCov.early[(1:(k+numCovar)),i] <- coef(lassoregCov.early, s=lambdaCov.early, exact=FALSE)[2:(numCovar+k+1)] 
+  lassoreg <- cv.glmnet(data.matrix(w0_w2[,c(1:k,(k*2+1):(k*2+numCovar))]), w0_w2[,(k+i)],
+                        family="gaussian", alpha=1, standardize=TRUE)
+  lambda <- lassoreg$lambda.min
+  adjMat[(1:(k+numCovar)),i] <- coef(lassoreg, s=lambda, exact=FALSE)[2:(numCovar+k+1)] 
 }
 
-## Estimate CLPN for middle
+
+labels <- c('anh', 'depr', 'slp', 'ftg', 'apt', 'bad', 'con', 'mot', 'si',
+  'sex', 'eth')
+names <- c('Anhedonia', 'Down, depressed, hopeless', 'Sleep dysregulation',
+           'Tired or having little energy', 'Appetite dysregulation',
+           'Feeling bad about yourself', 'Trouble concentrating', 'Motor slow/fidgity',
+           'Suicidal ideation')
+
+adjMat <- getWmat(adjMat, nNodes=k+NumCovar, labels=labels, directed=T) # note: DVs are in columns
+adjMat <- adjMat[1:k, 1:k]
+qgraph(adjMat, nodeNames = names)
+
+# create network without autoregressive effects
+adjMat2 <- adjMat
+diag(adjMat2) <- 0
+nwc1 <- qgraph(adjMat2, threshold = .05, nodeNames = names)
+
+
+
+
+# second network; w2 to w4
+
+adjMat3 <- matrix(0, (numCovar+k), (numCovar+k))
+
 for (i in 1:k) {
   set.seed(1)
-  lassoregCov.middle <- cv.glmnet(data.matrix(middleDat[,c(1:k,(k*2+1):(k*2+numCovar))]), middleDat[,(k+i)], nfolds=10,
-                                  family="binomial", alpha=1, standardize=TRUE)
-  lambdaCov.middle <- lassoregCov.middle$lambda.min
-  adjMatCov.middle[(1:(k+numCovar)),i] <- coef(lassoregCov.middle, s=lambdaCov.middle, exact=FALSE)[2:(numCovar+k+1)] 
+  lassoreg <- cv.glmnet(data.matrix(w2_w4[,c(1:k,(k*2+1):(k*2+numCovar))]), w2_w4[,(k+i)],
+                        family="gaussian", alpha=1, standardize=TRUE)
+  lambda <- lassoreg$lambda.min
+  adjMat3[(1:(k+numCovar)),i] <- coef(lassoreg, s=lambda, exact=FALSE)[2:(numCovar+k+1)] 
 }
 
-## Adjacency matrix
-adjMatCov.early <- getWmat(adjMatCov.early, nNodes=k+NumCovar, labels=labelsCov, directed=T) # note: DVs are in columns
-adjMatCov.middle <- getWmat(adjMatCov.middle, nNodes=k+NumCovar, labels=labelsCov, directed=T) # note: DVs are in columns
 
-# Remove covariates from adjacency matrix
-adjMat.early <- adjMatCov.early[1:k, 1:k]
-adjMat.middle <- adjMatCov.middle[1:k, 1:k]
 
-## Convert from logit/log odds to odds ratios
-adjMatOR.early <- exp(adjMat.early)
-adjMatOR.middle <- exp(adjMat.middle)
-adjMatOR.early
-adjMatOR.middle
-CLPN.OR <- function(data) {
-  ## create empty adjacency matrix
-  adjMatCovCLPN <- matrix(0, k+numCovar, k+numCovar) 
-  ## run CLPN loop to do series of nodewise regularized regressions
-  for (i in 1:9) {
-    # set.seed(1) # commented out so that it doesn't give the same answer every time when bootstrapping
-    lassoreg <- cv.glmnet(x=data.matrix(data[,c(1:k,(k*2+1):(k*2+numCovar))]), 
-                          y=data[,(k+i)], nfolds=10, grouped=TRUE,
-                          family="binomial", alpha=1, standardize=TRUE)
-    lambda <- lassoreg$lambda.min
-    ## paste coefficients into adjacency matrix
-    adjMatCovCLPN[1:(k+numCovar),i] <- coef(lassoreg, s=lambda, exact=FALSE)[2:(k+numCovar+1)]
-  }
-  ## remove covariates from adjacency matrix
-  adjMatCLPN <- adjMatCovCLPN[1:k, 1:k]
-  # Convert from logit/log odds to odds ratios
-  adjMatCLPN.OR <- exp(adjMatCLPN)
-  return(adjMatCLPN.OR)
-  #return(adjMatCLPN)
+
+adjMat3 <- getWmat(adjMat3, nNodes=k+NumCovar, labels=labels, directed=T) # note: DVs are in columns
+adjMat3 <- adjMat3[1:k, 1:k]
+qgraph(adjMat3, nodeNames = names)
+
+adjMat4 <- adjMat3
+diag(adjMat4) <- 0
+nwc2 <- qgraph(adjMat4, threshold = .05, nodeNames = names)
+
+
+
+
+
+# third network; w4 to w12
+
+adjMat5 <- matrix(0, (numCovar+k), (numCovar+k))
+
+for (i in 1:k) {
+  set.seed(1)
+  lassoreg <- cv.glmnet(data.matrix(w4_w12[,c(1:k,(k*2+1):(k*2+numCovar))]), w4_w12[,(k+i)],
+                        family="gaussian", alpha=1, standardize=TRUE)
+  lambda <- lassoreg$lambda.min
+  adjMat5[(1:(k+numCovar)),i] <- coef(lassoreg, s=lambda, exact=FALSE)[2:(numCovar+k+1)] 
 }
 
-## Estimate networks in bootnet (for bootstrapping)
-set.seed(1)
-net.early <- estimateNetwork(earlyDat, fun=CLPN.OR, labels=labels, directed=T)
-set.seed(1)
-net.middle <- estimateNetwork(middleDat, fun=CLPN.OR, labels=labels, directed=T)
-set.seed(1)
-nonParBoot.early.or <- bootnet(net.early, type="nonparametric", nBoots=5000, directed=T,
-                               statistics=c("edge"),
-                               ncores=8)
-
-set.seed(1)
-nonParBoot.middle.or <- bootnet(net.middle, type="nonparametric", nBoots=5000, directed=T,
-                                statistics=c("edge"),
-                                ncores=8)
-#estimate proportion of time bootstrapped edge > 1
-#this is because the 95% CI's don't really reflect confidence intervals
-#see https://psych-networks.com/bootstrapping-edges-after-regularization-clarifications-tutorial/
-early.bootTable <-nonParBoot.early.or$bootTable
-early_edge_conf <-early.bootTable %>% group_by(id) %>% 
-  mutate(total_count = n(),
-         conf = ifelse(value > 1 | value < 1, 1, 0)) %>%
-  summarize(conf_count = sum(conf),
-            Confidence = conf_count/total_count) %>%
-  distinct(id, .keep_all = T) %>%
-  separate(id, c("nodeOut", "nodeIn"), sep="->") %>% select(-conf_count)
-## `summarise()` has grouped output by 'id'. You can override using the `.groups` argument.
-middle.bootTable <-nonParBoot.middle.or$bootTable
-middle_edge_conf <- middle.bootTable %>% group_by(id) %>% 
-  mutate(total_count = n(),
-         conf = ifelse(value > 1| value < 1, 1, 0)) %>%
-  summarize(conf_count = sum(conf),
-            Confidence = conf_count/total_count) %>%
-  distinct(id, .keep_all = T) %>%
-  separate(id, c("nodeOut", "nodeIn"), sep="->") %>% select(-conf_count)
-## `summarise()` has grouped output by 'id'. You can override using the `.groups` argument.
-## Identify the strongest edges (note: row=IV, col=DV)
-res.early <- order(adjMatOR.early, decreasing = T)[seq_len(81)]
-pos.early <- arrayInd(res.early, dim(adjMatOR.early), useNames = TRUE)
-posWithLabs.early <- data.frame(nodeOut=labels[pos.early[,1]], 
-                                nodeIn=labels[pos.early[,2]],
-                                value=adjMatOR.early[res.early])
-Early.edges<-posWithLabs.early %>% mutate(Odds_Ratio = value) %>%
-  left_join(early_edge_conf, by=c("nodeOut", "nodeIn"))%>% drop_na() %>% filter(Odds_Ratio > 1 | Odds_Ratio < 1) #drop_na omits the autoregressive edges
 
 
-res.middle <- order(adjMatOR.middle, decreasing = T)[seq_len(81)]
-pos.middle <- arrayInd(res.middle, dim(adjMatOR.middle), useNames = TRUE)
-posWithLabs.middle <- data.frame(nodeOut=labelsCov[1:9][pos.middle[,1]],
-                                 nodeIn=labelsCov[1:9][pos.middle[,2]],
-                                 value=adjMatOR.middle[res.middle])
-Middle.edges<-posWithLabs.middle %>% mutate(Odds_Ratio = value) %>% select(-c(value)) %>%
-  left_join(middle_edge_conf, by=c("nodeOut", "nodeIn")) %>% drop_na()%>% filter(Odds_Ratio > 1 | Odds_Ratio < 1)
 
-#Table 2 in Manuscript
-joined_table <- left_join(Early.edges, Middle.edges, by=c("nodeOut", "nodeIn"))
-colnames(joined_table) <- c("nodeOut", "nodeIn", "Odds_Ratio_Early", "Confidence_Early", "Odds_Ratio_Middle", "Confidence_Middle")
-joined_table
+adjMat5 <- getWmat(adjMat5, nNodes=k+NumCovar, labels=labels, directed=T) # note: DVs are in columns
+adjMat5 <- adjMat5[1:k, 1:k]
+qgraph(adjMat5, nodeNames = names)
+
+adjMat6 <- adjMat5
+diag(adjMat6) <- 0
+nwc2 <- qgraph(adjMat6, threshold = .05, nodeNames = names)
+
+
+# graphical presentation of the longitudinal networks ###########################
+L <- averageLayout(adjMat2,adjMat4,adjMat6)
+
+pdf(file="clpn.pdf")
+par(mfrow = c(3,1))
+
+nwc1 <- qgraph(adjMat2, nodeNames=names, legend.cex = .5, title = "baseline to week 2",
+               threshold = .05, layout=L, asize=7, vsize=8, label.cex=1)
+
+nwc2 <- qgraph(adjMat4, nodeNames=names, legend.cex = .5, title = "week 2 to week 4",
+               threshold = .05, layout=L, asize=7, vsize=8, label.cex=1)
+
+nwc3 <- qgraph(adjMat6, nodeNames=names, legend.cex = .5, title = "week 4 to week 12",
+               threshold = .05, layout=L, asize=7, vsize=8, label.cex=1)
+
+all_nwc <- list('baseline to w2'=nwc1,'w2 to w4'=nwc2,'w4 to w12'=nwc3)
+
+cplot <- centralityPlot(all_nwc, include = c("InExpectedInfluence", "OutExpectedInfluence"), scale="z-scores")
+
+dev.off()
+
+
+
 
 
 
