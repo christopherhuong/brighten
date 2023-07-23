@@ -38,6 +38,8 @@ phq9_long1 <- phq9_long %>%
   ungroup() %>%
   filter(week %in% weeks_to_keep)
 
+# n = 272
+
 
 table(phq9_long1$week)
 # why does week 4 have one more observation than others. 
@@ -245,7 +247,8 @@ nwc3 <- qgraph(adjMat6, nodeNames=names, legend.cex = .5, title = "week 4 to wee
 
 all_nwc <- list('baseline to w2'=nwc1,'w2 to w4'=nwc2,'w4 to w12'=nwc3)
 
-cplot <- centralityPlot(all_nwc, include = c("InExpectedInfluence", "OutExpectedInfluence"), scale="z-scores")
+cplot <- centralityPlot(all_nwc, include = c("InExpectedInfluence", "OutExpectedInfluence"), 
+                        scale="z-scores")
 
 dev.off()
 
