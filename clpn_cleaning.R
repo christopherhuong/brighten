@@ -107,7 +107,7 @@ fill_with_average_week_data <- function(data, participant_id, week) {
 }
 
 
-phq_long2 <- phq_long1
+phq_long2 <- phq_long1 ################################
 
 # inspect each case closer
 # if any of the duplicates have sum_phq9=0 when the others arent, drop those
@@ -115,16 +115,13 @@ phq_long2 <- phq_long1
 phq_long2 %>%
   filter(participant_id == 'EN00077') %>%
   print()
-
-#remove the 2/3 week 2 entries with 0s
+#remove the 2/3 week2 entries with 0s
 phq_long2 <- phq_long2 %>%
-  filter(!(participant_id == 'EN00077' & is.na(sum_phq9)) | sum_phq9 != 0)
+  filter(!(participant_id == 'EN00077' & sum_phq9 == 0) | is.na(sum_phq9))
 
 
-################### FIX THAT ^^^^^^ ##################### IT KEEPS REMOVING NAS
 
 
-  
 phq %>%
   filter(participant_id == 'EN00080') %>%
   print()
