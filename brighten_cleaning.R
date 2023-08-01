@@ -382,22 +382,58 @@ pred_mat <- rbind(w0,w0,w0,w0,w0,w0,w0,w0,w0,
 rownames(pred_mat) <- NULL
 
 # specify the imputed variables
-bls <- list(sorted_phq_columns)
+bls <- as.list(sorted_phq_columns)
 
 rm(w0,w2,w4,w6,w8,w10,w12, phq_columns, sorted_phq_columns, get_week_number)
 
+
+# mice
 dat1_imp <- mice(dat1,
+                 predictorMatrix = pred_mat,
+                 blocks = bls,
                  maxit=3, m=3, seed=111)
 
 
-save(dat1_imp, file = 'phq_wide_imp.RData')
+# save(dat1_imp, file = 'phq_wide_imp.RData')
+
+load('phq_wide_imp.RData')
 
 
+stripplot(dat1_imp, phq5_week0, xlab = "Imputation Number")
+
+# mod <- with(phq_wide_imp.RData, {
+#   df <- data.frame(
+#     "ID" = participant_id,
+#     
+
+phq_imp <- complete(dat1_imp, action = 1)
+
+table(phq_imp$study_arm)
+# remove the single participant not randomized into a treatment group
+phq_imp <- phq_imp %>% filter(study_arm != "")
 
 
+# analytic sample = 456
+
+# save(phq_imp, file='phq_imp.RData')
 
 
+# long form
 
+phq_imp_long <- phq_imp %>%
+  pivot_longer(cols = starts_with("phq"),
+               names_to = c(".value", "week"),
+               names_pattern = "phq(\\d)_week(\\d+)")
+
+phq_imp_long$week <- as.numeric(phq_imp_long$week)
+
+colnames(phq_imp_long) <- c("participant_id", "gender", "education", "working", 
+                            "marital", "race", "age", "study_arm",
+                            "study", "gad7_sum", "week",
+                            "phq1", "phq2", "phq3", "phq4", "phq5",
+                            "phq6", "phq7", "phq8", "phq9")
+
+save(phq_imp_long, file = "phq_imp_long.RData")
 
 
 
