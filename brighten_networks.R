@@ -2,6 +2,7 @@ library(tidyverse)
 library(psych)
 library(NetworkComparisonTest)
 library(networktools)
+library(psychonetrics)
 library(mgm)
 library(bootnet)
 library(qgraph)
@@ -9,7 +10,9 @@ library(psychTools)
 library(glmnet)
 library(qgraph)
 library(lavaan)
-
+library(lmerTest)
+library(tseries)
+library(mlVAR)
 
 load('phq_imp.RData')
 load('phq_imp_long.RData')
@@ -27,7 +30,7 @@ gb <- goldbricker(select(dat_l,phq1:phq9), p = 0.05, method = "hittner2003", thr
 gb # no suggested reductions 
 
 # assumption checks -------------------------------------------------------
-
+# normality 
 ks.test(dat_l$phq1, rnorm(length(dat_l$phq1))) # sig
 ks.test(dat_l$phq2, rnorm(length(dat_l$phq2))) # sig
 ks.test(dat_l$phq3, rnorm(length(dat_l$phq3))) # sig
@@ -37,9 +40,11 @@ ks.test(dat_l$phq6, rnorm(length(dat_l$phq6))) # sig
 ks.test(dat_l$phq7, rnorm(length(dat_l$phq7))) # sig
 ks.test(dat_l$phq8, rnorm(length(dat_l$phq8))) # sig
 ks.test(dat_l$phq9, rnorm(length(dat_l$phq9))) # sig
+#none are normal
+
 
 # histograms
-vars_list <- colnames(select(dat_l, phq1:phq9))
+vars_list <- colnames(dplyr::select(dat_l, phq1:phq9))
 for (i in vars_list) {
   hist(dat_l[, i], xlab = i, main = "", col = "lightblue", border = "white")
 }
@@ -114,7 +119,18 @@ for (v in vars_list){
 # ehhh, move on with raw data
 
 
-# stationarity check ------------------------------------------------------
+
+
+# check time trends -------------------------------------------------------
+
+# using lmer
+lmer(phq1 ~ week + (week | participant_id),data=dat_l,
+           control = lmerControl(optimizer = "bobyqa")) %>% summary()
+
+
+
+lmer(phq2 ~ week + (week | participant_id),data=dat_l,
+           control = lmerControl(optimizer = "bobyqa")) %>% summary()
 
 
 
@@ -124,6 +140,79 @@ for (v in vars_list){
 
 
 
+
+
+# via KPSS test
+kpss.test(dat_l$phq1, null = c('Trend'))
+#The p-value is 0.1. Since this value is not less than .05, we fail 
+#to reject the null hypothesis of the KPSS test.
+#This means we can assume that the time series is trend stationary.
+
+kpss.test(dat_l$phq2, null = c('Trend'))
+kpss.test(dat_l$phq3, null = c('Trend'))
+kpss.test(dat_l$phq4, null = c('Trend'))
+kpss.test(dat_l$phq5, null = c('Trend')) #non stationary
+kpss.test(dat_l$phq6, null = c('Trend'))
+kpss.test(dat_l$phq7, null = c('Trend'))
+kpss.test(dat_l$phq8, null = c('Trend'))
+kpss.test(dat_l$phq9, null = c('Trend'))
+
+
+dat_l %>%
+  filter(participant_id == "BLUE-00050") %>%
+  pull(phq1) %>%
+  kpss.test(null = c("Trend"))
+
+# may have to test per participant?
+
+
+####################################################################################
+##############################      networks ---------------------------------------
+####################################################################################
+dat_l1 <- dat_l %>%
+  mutate(week = case_when(week == 0 ~ 1,
+                          week == 2 ~ 2,
+                          week == 4 ~ 3,
+                          week == 6 ~ 4,
+                          week == 8 ~ 5,
+                          week == 10 ~ 6,
+                          week == 12 ~ 7))
+
+
+vars <- c("phq1", "phq2", "phq3", "phq4", "phq5", "phq6", "phq7", "phq8", "phq9")
+
+
+dat_l1 <- dat_l1 %>%
+  select(c(participant_id, week, all_of(vars)))
+
+mod <- ml_ts_lvgvar(dat_l1, beepvar = "week", idvar = "participant_id",
+                    vars = vars,
+                    estimator = "FIML",
+                    standardize = "none")
+
+
+
+
+
+
+
+mod <- mlVAR(dat_l1, idvar = "participant_id",
+             beepvar = "week", 
+             lags = 1,
+             vars = vars)
+
+
+
+temporal_plot <-plot(mod,"temporal", label.scale.equal=T, label.cex=1.2, posCol= "black", negCol="black", negDashed=T, fade=F)
+contemp_plot <-plot(mod,"contemporaneous", label.scale.equal=T, label.cex=1.2, posCol= "black", negCol="black", negDashed=T, fade=F)
+
+
+
+
+
+dat_l %>%
+  select(all_of(vars)) %>%
+  describe()
 
 
 
