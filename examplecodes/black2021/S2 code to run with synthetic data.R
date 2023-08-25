@@ -60,7 +60,7 @@ library(lavaan)
 
 # load data: --------------------------------------------------------------
 
-Data<- read.csv("S4FakeData.csv", row.names = 1L, check.names = FALSE)
+Data<- read.csv("examplecodes/black2021/S4FakeData.csv", row.names = 1L, check.names = FALSE)
 
 
 # code from actual analysis -----------------------------------------------
@@ -316,3 +316,14 @@ for (i in 1:length(dfList)){
 }
 
 
+
+
+
+# idk ---------------------------------------------------------------------
+
+
+
+
+umod <- panelgvar(dfNG, vars = des, estimator= "FIML", missing="pairwise") %>% 
+  runmodel()# run unpruned 
+unprunedfit <- umod@fitmeasures

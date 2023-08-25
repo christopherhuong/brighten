@@ -1,11 +1,10 @@
 library(tidyverse)
 library(psych)
-library(NetworkComparisonTest)
+# library(NetworkComparisonTest)
 library(networktools)
 library(psychonetrics)
 library(mgm)
 library(bootnet)
-library(qgraph)
 library(psychTools)
 library(glmnet)
 library(qgraph)
@@ -169,51 +168,49 @@ dat_l %>%
 ####################################################################################
 ##############################      networks ---------------------------------------
 ####################################################################################
-dat_l1 <- dat_l %>%
-  mutate(week = case_when(week == 0 ~ 1,
-                          week == 2 ~ 2,
-                          week == 4 ~ 3,
-                          week == 6 ~ 4,
-                          week == 8 ~ 5,
-                          week == 10 ~ 6,
-                          week == 12 ~ 7))
+load('phq_imp.RData')
+dat_w <- phq_imp             #wide
+rm(phq_imp, phq_imp_long)
+
+
 
 
 vars <- c("phq1", "phq2", "phq3", "phq4", "phq5", "phq6", "phq7", "phq8", "phq9")
 
 
-dat_l1 <- dat_l1 %>%
-  select(c(participant_id, week, all_of(vars)))
+dat <- dat_w[, 11:73]
 
-mod <- ml_ts_lvgvar(dat_l1, beepvar = "week", idvar = "participant_id",
-                    vars = vars,
-                    estimator = "FIML",
-                    standardize = "none")
+# Sample column names
+column_names <- colnames(dat)
+# Extract the numeric values from the "X" part of the column names
+numeric_suffix <- as.numeric(sub("phq(\\d+)_.*", "\\1", column_names))
+# Sort column names based on the numeric suffix
+sorted_column_names <- column_names[order(numeric_suffix)]
+# Print the sorted column names
+dat <- dat [, sorted_column_names]
 
-
-
-
-
-
-
-mod <- mlVAR(dat_l1, idvar = "participant_id",
-             beepvar = "week", 
-             lags = 1,
-             vars = vars)
+desmat <- matrix(as.vector(colnames(dat)),9, byrow = T)
 
 
-
-temporal_plot <-plot(mod,"temporal", label.scale.equal=T, label.cex=1.2, posCol= "black", negCol="black", negDashed=T, fade=F)
-contemp_plot <-plot(mod,"contemporaneous", label.scale.equal=T, label.cex=1.2, posCol= "black", negCol="black", negDashed=T, fade=F)
+corpcor::is.positive.definite(cor_auto(dat)) #true
 
 
+umod <- panelgvar(data = dat, vars = desmat, estimator= "FIML", missing="pairwise") %>% 
+  runmodel()# run unpruned 
+unprunedfit <- umod@fitmeasures
+umod %>% parameters
 
 
+pmod <- umod %>% 
+  runmodel %>% 
+  prune(alpha = 0.001, adjust = "none", recursive = FALSE)  
 
-dat_l %>%
-  select(all_of(vars)) %>%
-  describe()
-
+# Search strategy
+if ("modelsearch" == "stepup"){
+  pmod <- pmod %>%  stepup(alpha = 0.001, criterion = "bic")
+} else if ("modelsearch" == "modelsearch"){
+  pmod <- pmod %>%  modelsearch(prunealpha = 0.001, addalpha = 0.001)
+} # takes too long wtf
 
 
 
