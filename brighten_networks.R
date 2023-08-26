@@ -216,10 +216,10 @@ if ("modelsearch" == "stepup"){
 
 
 
-
-
-
-
+# 
+# save(pmod, file = "pmod.RData")
+# save(umod, file = "umod.RData")
+# save(unprunedfit, file = "unprunedfit.RData")
 
 
 
