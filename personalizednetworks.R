@@ -1,5 +1,5 @@
 library(tidyverse)
-
+library(graphicalVAR)
 
 
 
@@ -55,34 +55,43 @@ max_days <- dat %>% group_by(id) %>% summarise(max.consecutive = gl(date))
 dat <- merge(dat, max_days, by = "id")
 
 dat <- dat %>%
-  filter(max.consecutive > 50) %>%
+  filter(max.consecutive > 30) %>%
   select(-max.consecutive)
 
 n_distinct(dat$id)
 
-#7 participants left for personalized networks
+#11 participants left for personalized networks
 
 #manually subset observations with the consecutive days
-dat80 <- dat %>%
-  filter(id == "EN00080", date >= "2016-10-06", date <= "2016-12-03")
+# dat80 <- dat %>%
+#   filter(id == "EN00080", date >= "2016-10-06", date <= "2016-12-03")
+# 
+# 
+# dat399 <- dat %>%
+#   filter(id == "EN00399", date >= "2016-11-14", date <= "2017-01-25")
+# 
 
-dat101 <- dat %>%
-  filter(id == "EN00101", date >= "2016-09-23", date <= "2016-11-30")
 
-dat301 <- dat %>%
-  filter(id == "EN00301", date >= "2016-09-12", date <= "2016-11-10")
+dat561 <- dat %>%
+  filter(id == "EN00561", date >= "2016-11-15", date <= "2017-02-04")
 
-dat399 <- dat %>%
-  filter(id == "EN00399", date >= "2016-11-14", date <= "2017-01-25")
-
-dat590 <- dat %>%
-  filter(id == "EN00590", date >= "2016-11-14", date <= "2017-02-04")
-
-dat647 <- dat %>%
-  filter(id == "EN00647", date >= "2016-12-22", date <= "2017-02-19")
-
-dat5254 <- dat %>%
-  filter(id == "EN05254", date >= "2017-01-11", date <= "2017-03-03")
+# dat590 <- dat %>%
+#   filter(id == "EN00590", date >= "2016-11-14", date <= "2017-02-04")
+# 
+# dat647 <- dat %>%
+#   filter(id == "EN00647", date >= "2016-12-22", date <= "2017-02-19")
+# 
+# dat5254 <- dat %>%
+#   filter(id == "EN05254", date >= "2017-01-11", date <= "2017-03-03")
+# 
+# dat644 <- dat %>%
+#   filter(id == "EN00644") %>%
+#   slice(-12) %>%
+#   filter(date >= "2016-11-28", date <= "2017-02-19")
+# 
+# dat5297 <- dat %>%
+#   filter(id == "EN05297", date >= "2017-01-09", date <= "2017-03-31")
+# 
 
 
 #check if row numbers match consecutive days, reinspect if not
@@ -99,34 +108,71 @@ rm(dat101, dat301)
 # personalized networks ---------------------------------------------------
 
 
-net80 <- graphicalVAR(dat80, nLambda = 10, verbose = T, gamma = 0.5,
-         scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
-plot(net80, "PDC", layout="spring")
+# net80 <- graphicalVAR(dat80, nLambda = 50, verbose = T, gamma = 0.5,
+#          scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
+# plot(net80, "PDC", layout="spring")
+# 
+# 
+# ###########
+# 
+# net399 <- graphicalVAR(dat399, nLambda = 50, verbose = T, gamma = 0.5,
+#                       scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
+# plot(net399, "PDC", layout="spring")
+
+# #############
+
+net561 <- graphicalVAR(dat561, nLambda = 50, verbose = T, gamma = 0,
+                       scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
+
+vars = c("actv", "slp", "stat", "depr", "anhe")
+nodenames = c("The cumulative time spent in the active velocity bin",
+              "The estimated hours of sleep accrued during the previous night",
+              "The cumulative time spent in the stationary velocity bin",
+              "Yesterday, were you bothered by any of the following problems: feeling down, depressed, or hopeless",
+              "Yesterday, did you have little interest or pleasure in doing things?")
+
+pdf(file="personalnetwork.pdf", width = 7, height = 10)
+par(mfrow = c(2,1))
+plot(net561, "PDC", layout="spring", labels = vars)
+plot(net561, "PCC", layout="spring", labels = vars)
+dev.off()
 
 
-###########
+# #############
+# 
+# net590 <- graphicalVAR(dat590, nLambda = 10, verbose = T, gamma = 0.5,
+#                       scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
+# plot(net590, "PDC", layout="spring")
+# 
+# ############
+# 
+# net647 <- graphicalVAR(dat647, nLambda = 10, verbose = T, gamma = 0.5,
+#                       scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
+# plot(net647, "PDC", layout="spring")
+# 
+# ############
+# 
+# net5254 <- graphicalVAR(dat5254, nLambda = 10, verbose = T, gamma = 0.5,
+#                       scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
+# plot(net5254, "PDC", layout="spring")
+# 
+# 
 
-net399 <- graphicalVAR(dat399, nLambda = 10, verbose = T, gamma = 0.5,
-                      scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
-plot(net399, "PDC", layout="spring")
+# net644 <- graphicalVAR(dat644, nLambda = 50, verbose = T, gamma = 0.5,
+#                        scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
+# plot(net644, "PDC", layout="spring")
+# 
+# 
+# net5297 <- graphicalVAR(dat5297, nLambda = 50, verbose = T, gamma = 0.5,
+#                        scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
+# plot(net5297, "PDC", layout="spring")
+# 
+# 
 
-#############
 
-net590 <- graphicalVAR(dat590, nLambda = 10, verbose = T, gamma = 0.5,
-                      scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
-plot(net590, "PDC", layout="spring")
 
-############
 
-net647 <- graphicalVAR(dat647, nLambda = 10, verbose = T, gamma = 0.5,
-                      scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
-plot(net647, "PDC", layout="spring")
 
-############
-
-net5254 <- graphicalVAR(dat5254, nLambda = 10, verbose = T, gamma = 0.5,
-                      scale = T, vars =c("active", "sleep", "station", "phq1", "phq2"))
-plot(net5254, "PDC", layout="spring")
 
 
 
